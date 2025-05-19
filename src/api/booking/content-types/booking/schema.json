@@ -1,0 +1,68 @@
+{
+  "kind": "collectionType",
+  "collectionName": "bookings",
+  "info": {
+    "singularName": "booking",
+    "pluralName": "bookings",
+    "displayName": "Booking",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "email": {
+      "type": "email",
+      "required": true
+    },
+    "phone": {
+      "type": "string",
+      "required": true
+    },
+    "hours": {
+      "type": "integer",
+      "required": true,
+      "min": 1
+    },
+    "price": {
+      "type": "decimal",
+      "required": true,
+      "min": 0
+    },
+    "amount": {
+      "type": "decimal",
+      "required": true,
+      "min": 0
+    },
+    "comment": {
+      "type": "text"
+    },
+    "authority": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string",
+      "default": "Payment initiated"
+    },
+    "ref_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "pending_payment",
+        "paid",
+        "failed",
+        "cancelled"
+      ],
+      "default": "pending_payment"
+    },
+    "payment_data": {
+      "type": "text"
+    }
+  }
+}

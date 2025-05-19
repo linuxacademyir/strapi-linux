@@ -1,0 +1,48 @@
+{
+  "kind": "collectionType",
+  "collectionName": "sales",
+  "info": {
+    "singularName": "sale",
+    "pluralName": "sales",
+    "displayName": "Sales",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "name": {
+      "type": "string"
+    },
+    "meetLink": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "email": {
+      "type": "email"
+    },
+    "description": {
+      "type": "text"
+    },
+    "date": {
+      "type": "datetime"
+    },
+    "quantity": {
+      "type": "integer"
+    },
+    "price": {
+      "type": "biginteger"
+    },
+    "totalPrice": {
+      "type": "biginteger"
+    },
+    "refId": {
+      "type": "string"
+    },
+    "paymentStatus": {
+      "type": "string"
+    }
+  }
+}

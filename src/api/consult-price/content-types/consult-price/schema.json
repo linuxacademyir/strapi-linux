@@ -1,0 +1,18 @@
+{
+  "kind": "collectionType",
+  "collectionName": "consult_prices",
+  "info": {
+    "singularName": "consult-price",
+    "pluralName": "consult-prices",
+    "displayName": "Consult Price",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "hourlyRate": {
+      "type": "string"
+    }
+  }
+}

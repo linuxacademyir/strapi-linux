@@ -1,0 +1,28 @@
+{
+  "kind": "singleType",
+  "collectionName": "booking_thank_yous",
+  "info": {
+    "singularName": "booking-thank-you",
+    "pluralName": "booking-thank-yous",
+    "displayName": "BookingThankYou",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "title": {
+      "type": "string"
+    },
+    "content": {
+      "type": "dynamiczone",
+      "components": [
+        "shared.slider",
+        "shared.seo",
+        "shared.rich-text",
+        "shared.quote",
+        "shared.media"
+      ]
+    }
+  }
+}

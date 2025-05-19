@@ -1,0 +1,27 @@
+{
+  "kind": "collectionType",
+  "collectionName": "positions",
+  "info": {
+    "singularName": "position",
+    "pluralName": "positions",
+    "displayName": "Position",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "position": {
+      "type": "string"
+    },
+    "companyUrl": {
+      "type": "string"
+    },
+    "description": {
+      "type": "text"
+    },
+    "companyName": {
+      "type": "string"
+    }
+  }
+}

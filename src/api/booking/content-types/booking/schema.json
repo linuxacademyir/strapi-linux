@@ -63,6 +63,9 @@
     },
     "payment_data": {
       "type": "text"
+    },
+    "meeting_url": {
+      "type": "string"
     }
   }
 }

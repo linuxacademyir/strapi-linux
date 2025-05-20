@@ -556,6 +556,7 @@ export interface ApiBookingBooking extends Struct.CollectionTypeSchema {
       'api::booking.booking'
     > &
       Schema.Attribute.Private;
+    meeting_url: Schema.Attribute.String;
     message: Schema.Attribute.String &
       Schema.Attribute.DefaultTo<'Payment initiated'>;
     name: Schema.Attribute.String & Schema.Attribute.Required;

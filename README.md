@@ -59,3 +59,12 @@ Feel free to check out the [Strapi GitHub repository](https://github.com/strapi/
 ---
 
 <sub>🤫 Psst! [Strapi is hiring](https://strapi.io/careers).</sub>
+
+## ➡️ Zarinpal Payment Gateway Configuration
+
+To enable Zarinpal payment integration for bookings, add the following environment variables:
+
+- **ZARINPAL_MERCHANT_ID**: Your Zarinpal Merchant ID.
+- **ZARINPAL_CALLBACK_URL**: Callback URL for payment verification, e.g. `https://<your-domain>/api/bookings/verify`.
+- **ZARINPAL_BASE_URL**: Base domain for Zarinpal API (use `https://sandbox.zarinpal.com` for sandbox, `https://api.zarinpal.com` for production).
+- **ZARINPAL_DESCRIPTION**: Description for the payment.

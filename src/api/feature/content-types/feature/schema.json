@@ -1,0 +1,51 @@
+{
+  "kind": "collectionType",
+  "collectionName": "features",
+  "info": {
+    "singularName": "feature",
+    "pluralName": "features",
+    "displayName": "Feature",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "name": {
+      "type": "string"
+    },
+    "platform": {
+      "type": "enumeration",
+      "enum": [
+        "instagram",
+        "youtube"
+      ]
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": [
+        "story",
+        "reel",
+        "youtubepost",
+        "tag"
+      ]
+    },
+    "description": {
+      "type": "blocks"
+    },
+    "example_link": {
+      "type": "string"
+    },
+    "media_format": {
+      "type": "enumeration",
+      "enum": [
+        "image",
+        "video",
+        "text"
+      ]
+    },
+    "is_active": {
+      "type": "boolean"
+    }
+  }
+}

@@ -58,12 +58,12 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
       }
 
       // Create booking record
-    const booking = await strapi.entityService.create('api::booking.booking', {
-      data: {
-        ...data,
-        message: 'Payment initiated' // Use existing field instead of status
-      }
-    });
+      const booking = await strapi.entityService.create('api::booking.booking', {
+        data: {
+          ...data,
+          message: 'Payment initiated', // Use existing field instead of status
+        },
+      });
 
       // Prepare payment request
       const paymentRequest: ZarinpalPaymentRequest = {

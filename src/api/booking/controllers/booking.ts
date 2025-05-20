@@ -58,12 +58,12 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
       }
 
       // Create booking record
-      const booking = await strapi.entityService.create('api::booking.booking', {
-  data: {
-    ...data,
-    message: 'Payment initiated' // Use existing field instead of status
-  }
-});
+    const booking = await strapi.entityService.create('api::booking.booking', {
+      data: {
+        ...data,
+        message: 'Payment initiated' // Use existing field instead of status
+      }
+    });
 
       // Prepare payment request
       const paymentRequest: ZarinpalPaymentRequest = {
@@ -318,5 +318,17 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
       strapi.log.error('Google createEvent error:', err);
       return ctx.badRequest(err.message || 'Google createEvent API error');
     }
+  },
+
+  // DEBUG override for findOne to diagnose missing records
+  async findOne(ctx) {
+    const { id } = ctx.params;
+    strapi.log.debug(`→ booking.findOne() called with id=${id}`);
+    const record = await strapi.entityService.findOne('api::booking.booking', id, {});
+    strapi.log.debug('→ entityService.findOne returned:', record);
+    if (!record) {
+      return ctx.notFound(`No booking found for id=${id}`);
+    }
+    return { data: record };
   },
 }));

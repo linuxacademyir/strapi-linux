@@ -698,6 +698,7 @@ export interface ApiFeatureFeature extends Struct.CollectionTypeSchema {
       Schema.Attribute.Private;
     media_format: Schema.Attribute.Enumeration<['image', 'video', 'text']>;
     name: Schema.Attribute.String;
+    packages: Schema.Attribute.Relation<'manyToMany', 'api::package.package'>;
     platform: Schema.Attribute.Enumeration<['instagram', 'youtube']>;
     publishedAt: Schema.Attribute.DateTime;
     type: Schema.Attribute.Enumeration<['story', 'reel', 'youtubepost', 'tag']>;
@@ -768,7 +769,7 @@ export interface ApiOrderOrder extends Struct.CollectionTypeSchema {
     note: Schema.Attribute.String;
     orderId: Schema.Attribute.String;
     orderStatus: Schema.Attribute.String;
-    package: Schema.Attribute.String;
+    package: Schema.Attribute.Relation<'manyToOne', 'api::package.package'>;
     phone: Schema.Attribute.BigInteger;
     price: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
@@ -796,6 +797,7 @@ export interface ApiPackagePackage extends Struct.CollectionTypeSchema {
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     description: Schema.Attribute.Text;
+    features: Schema.Attribute.Relation<'manyToMany', 'api::feature.feature'>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',

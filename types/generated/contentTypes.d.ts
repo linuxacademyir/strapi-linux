@@ -373,36 +373,6 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
-export interface ApiAboutAbout extends Struct.SingleTypeSchema {
-  collectionName: 'abouts';
-  info: {
-    description: 'Write about yourself and the content you create';
-    displayName: 'About';
-    pluralName: 'abouts';
-    singularName: 'about';
-  };
-  options: {
-    draftAndPublish: false;
-  };
-  attributes: {
-    blocks: Schema.Attribute.DynamicZone<
-      ['shared.media', 'shared.quote', 'shared.rich-text', 'shared.slider']
-    >;
-    createdAt: Schema.Attribute.DateTime;
-    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-    locale: Schema.Attribute.String & Schema.Attribute.Private;
-    localizations: Schema.Attribute.Relation<'oneToMany', 'api::about.about'> &
-      Schema.Attribute.Private;
-    publishedAt: Schema.Attribute.DateTime;
-    readTime: Schema.Attribute.Date & Schema.Attribute.Required;
-    title: Schema.Attribute.String;
-    updatedAt: Schema.Attribute.DateTime;
-    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-  };
-}
-
 export interface ApiArticleArticle extends Struct.CollectionTypeSchema {
   collectionName: 'articles';
   info: {
@@ -477,39 +447,57 @@ export interface ApiAuthorAuthor extends Struct.CollectionTypeSchema {
   };
 }
 
-export interface ApiBookingThankYouBookingThankYou
-  extends Struct.SingleTypeSchema {
-  collectionName: 'booking_thank_yous';
+export interface ApiAvailableHourAvailableHour
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'available_hours';
   info: {
-    description: '';
-    displayName: 'BookingThankYou';
-    pluralName: 'booking-thank-yous';
-    singularName: 'booking-thank-you';
+    description: 'Define day-of-week and time ranges for availability';
+    displayName: 'Available Hour';
+    pluralName: 'available-hours';
+    singularName: 'available-hour';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
-    content: Schema.Attribute.DynamicZone<
-      [
-        'shared.slider',
-        'shared.seo',
-        'shared.rich-text',
-        'shared.quote',
-        'shared.media',
-      ]
-    >;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    day: Schema.Attribute.Enumeration<
+      [
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
+        'sunday',
+      ]
+    > &
+      Schema.Attribute.Required;
+    endTime: Schema.Attribute.Time & Schema.Attribute.Required;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
-      'api::booking-thank-you.booking-thank-you'
+      'api::available-hour.available-hour'
     > &
       Schema.Attribute.Private;
     publishedAt: Schema.Attribute.DateTime;
-    title: Schema.Attribute.String;
+    startTime: Schema.Attribute.Time & Schema.Attribute.Required;
+    timeZone: Schema.Attribute.Enumeration<
+      [
+        'UTC',
+        'Europe/London',
+        'Europe/Berlin',
+        'America/New_York',
+        'America/Los_Angeles',
+        'Asia/Tehran',
+        'Asia/Dubai',
+        'Asia/Tokyo',
+        'Australia/Sydney',
+      ]
+    > &
+      Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -536,12 +524,20 @@ export interface ApiBookingBooking extends Struct.CollectionTypeSchema {
         },
         number
       >;
-    authority: Schema.Attribute.String;
-    comment: Schema.Attribute.Text;
+    bookingStatus: Schema.Attribute.Enumeration<
+      [
+        'Payment initiated',
+        'Payment successful',
+        'Payment Failed',
+        'Payment Refunded',
+        'Meeting scheduled',
+      ]
+    > &
+      Schema.Attribute.DefaultTo<'Payment initiated'>;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
-    email: Schema.Attribute.Email & Schema.Attribute.Required;
+    customer: Schema.Attribute.Relation<'manyToOne', 'api::customer.customer'>;
     hours: Schema.Attribute.Integer &
       Schema.Attribute.Required &
       Schema.Attribute.SetMinMax<
@@ -550,18 +546,19 @@ export interface ApiBookingBooking extends Struct.CollectionTypeSchema {
         },
         number
       >;
+    internalNote: Schema.Attribute.Text;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
       'api::booking.booking'
     > &
       Schema.Attribute.Private;
-    meeting_url: Schema.Attribute.String;
-    message: Schema.Attribute.String &
-      Schema.Attribute.DefaultTo<'Payment initiated'>;
-    name: Schema.Attribute.String & Schema.Attribute.Required;
-    payment_data: Schema.Attribute.Text;
-    phone: Schema.Attribute.String & Schema.Attribute.Required;
+    meetingEndDate: Schema.Attribute.Date;
+    meetingEndTime: Schema.Attribute.Time;
+    meetingStartDate: Schema.Attribute.Date;
+    meetingStartTime: Schema.Attribute.Time;
+    meetingUrl: Schema.Attribute.String;
+    note: Schema.Attribute.Text;
     price: Schema.Attribute.Decimal &
       Schema.Attribute.Required &
       Schema.Attribute.SetMinMax<
@@ -571,11 +568,7 @@ export interface ApiBookingBooking extends Struct.CollectionTypeSchema {
         number
       >;
     publishedAt: Schema.Attribute.DateTime;
-    ref_id: Schema.Attribute.String;
-    status: Schema.Attribute.Enumeration<
-      ['pending_payment', 'paid', 'failed', 'cancelled']
-    > &
-      Schema.Attribute.DefaultTo<'pending_payment'>;
+    transactionId: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -614,29 +607,34 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
   };
 }
 
-export interface ApiConsultPriceConsultPrice
-  extends Struct.CollectionTypeSchema {
-  collectionName: 'consult_prices';
+export interface ApiCustomerCustomer extends Struct.CollectionTypeSchema {
+  collectionName: 'customers';
   info: {
     description: '';
-    displayName: 'Consult Price';
-    pluralName: 'consult-prices';
-    singularName: 'consult-price';
+    displayName: 'Customer';
+    pluralName: 'customers';
+    singularName: 'customer';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
+    active: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    bookings: Schema.Attribute.Relation<'oneToMany', 'api::booking.booking'>;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
-    hourlyRate: Schema.Attribute.String;
+    email: Schema.Attribute.Email & Schema.Attribute.Required;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
-      'api::consult-price.consult-price'
+      'api::customer.customer'
     > &
       Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    phone: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -725,6 +723,7 @@ export interface ApiGlobalGlobal extends Struct.SingleTypeSchema {
       Schema.Attribute.Private;
     defaultSeo: Schema.Attribute.Component<'shared.seo', false>;
     favicon: Schema.Attribute.Media<'images' | 'files' | 'videos'>;
+    hourlyRate: Schema.Attribute.String;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -750,30 +749,38 @@ export interface ApiOrderOrder extends Struct.CollectionTypeSchema {
     singularName: 'order';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
+  };
+  pluginOptions: {
+    revision: {
+      disable: true;
+    };
   };
   attributes: {
     amount: Schema.Attribute.String;
-    companyLogo: Schema.Attribute.Media<'images'>;
-    companyName: Schema.Attribute.String;
-    companyWebsite: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
-    email: Schema.Attribute.Email;
-    internalNote: Schema.Attribute.String;
+    internalNote: Schema.Attribute.Text;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<'oneToMany', 'api::order.order'> &
       Schema.Attribute.Private;
-    name: Schema.Attribute.String;
-    note: Schema.Attribute.String;
-    orderId: Schema.Attribute.String;
-    orderStatus: Schema.Attribute.String;
+    note: Schema.Attribute.Text;
+    orderStatus: Schema.Attribute.Enumeration<
+      [
+        'Payment initiated',
+        'Payment successful',
+        'Payment Failed',
+        'Payment Refunded',
+      ]
+    > &
+      Schema.Attribute.DefaultTo<'Payment initiated'>;
     package: Schema.Attribute.Relation<'manyToOne', 'api::package.package'>;
-    phone: Schema.Attribute.BigInteger;
     price: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     quantity: Schema.Attribute.String;
+    sponser: Schema.Attribute.Relation<'manyToOne', 'api::sponser.sponser'>;
+    transactionId: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -848,38 +855,6 @@ export interface ApiPositionPosition extends Struct.CollectionTypeSchema {
   };
 }
 
-export interface ApiProductProduct extends Struct.CollectionTypeSchema {
-  collectionName: 'products';
-  info: {
-    description: '';
-    displayName: 'Product';
-    pluralName: 'products';
-    singularName: 'product';
-  };
-  options: {
-    draftAndPublish: true;
-  };
-  attributes: {
-    createdAt: Schema.Attribute.DateTime;
-    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-    description: Schema.Attribute.Text;
-    image: Schema.Attribute.Media<'images' | 'files' | 'videos' | 'audios'>;
-    locale: Schema.Attribute.String & Schema.Attribute.Private;
-    localizations: Schema.Attribute.Relation<
-      'oneToMany',
-      'api::product.product'
-    > &
-      Schema.Attribute.Private;
-    name: Schema.Attribute.String;
-    price: Schema.Attribute.BigInteger;
-    publishedAt: Schema.Attribute.DateTime;
-    updatedAt: Schema.Attribute.DateTime;
-    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-  };
-}
-
 export interface ApiSponserSponser extends Struct.CollectionTypeSchema {
   collectionName: 'sponsers';
   info: {
@@ -889,22 +864,71 @@ export interface ApiSponserSponser extends Struct.CollectionTypeSchema {
     singularName: 'sponser';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
+    active: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    companyLogo: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios'
+    >;
+    companyName: Schema.Attribute.String;
+    companyWebsite: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
-    link: Schema.Attribute.String;
+    email: Schema.Attribute.Email;
+    instagramId: Schema.Attribute.String;
+    internalNote: Schema.Attribute.Text;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
       'api::sponser.sponser'
     > &
       Schema.Attribute.Private;
-    logo: Schema.Attribute.Media<'images' | 'files' | 'videos' | 'audios'>;
     name: Schema.Attribute.String;
+    note: Schema.Attribute.Text;
+    orders: Schema.Attribute.Relation<'oneToMany', 'api::order.order'>;
+    phone: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiYoutubeVideoYoutubeVideo
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'youtube_videos';
+  info: {
+    description: '';
+    displayName: 'Youtube Video';
+    pluralName: 'youtube-videos';
+    singularName: 'youtube-video';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    agenda: Schema.Attribute.Text;
+    articles: Schema.Attribute.Relation<'manyToMany', 'api::article.article'>;
+    chapters: Schema.Attribute.Text;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::youtube-video.youtube-video'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    orders: Schema.Attribute.Relation<'manyToMany', 'api::order.order'>;
+    publishedAt: Schema.Attribute.DateTime;
+    sponsers: Schema.Attribute.Relation<'manyToMany', 'api::sponser.sponser'>;
+    title: Schema.Attribute.String;
+    titleCover: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1366,7 +1390,6 @@ export interface PluginUsersPermissionsUser
   };
   options: {
     draftAndPublish: false;
-    timestamps: true;
   };
   attributes: {
     blocked: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
@@ -1386,11 +1409,13 @@ export interface PluginUsersPermissionsUser
       'plugin::users-permissions.user'
     > &
       Schema.Attribute.Private;
+    name: Schema.Attribute.String;
     password: Schema.Attribute.Password &
       Schema.Attribute.Private &
       Schema.Attribute.SetMinMaxLength<{
         minLength: 6;
       }>;
+    phone: Schema.Attribute.String;
     provider: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     resetPasswordToken: Schema.Attribute.String & Schema.Attribute.Private;
@@ -1420,21 +1445,20 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
-      'api::about.about': ApiAboutAbout;
       'api::article.article': ApiArticleArticle;
       'api::author.author': ApiAuthorAuthor;
-      'api::booking-thank-you.booking-thank-you': ApiBookingThankYouBookingThankYou;
+      'api::available-hour.available-hour': ApiAvailableHourAvailableHour;
       'api::booking.booking': ApiBookingBooking;
       'api::category.category': ApiCategoryCategory;
-      'api::consult-price.consult-price': ApiConsultPriceConsultPrice;
+      'api::customer.customer': ApiCustomerCustomer;
       'api::faq.faq': ApiFaqFaq;
       'api::feature.feature': ApiFeatureFeature;
       'api::global.global': ApiGlobalGlobal;
       'api::order.order': ApiOrderOrder;
       'api::package.package': ApiPackagePackage;
       'api::position.position': ApiPositionPosition;
-      'api::product.product': ApiProductProduct;
       'api::sponser.sponser': ApiSponserSponser;
+      'api::youtube-video.youtube-video': ApiYoutubeVideoYoutubeVideo;
       'plugin::content-releases.release': PluginContentReleasesRelease;
       'plugin::content-releases.release-action': PluginContentReleasesReleaseAction;
       'plugin::i18n.locale': PluginI18NLocale;

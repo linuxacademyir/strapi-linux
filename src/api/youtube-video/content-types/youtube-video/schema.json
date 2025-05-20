@@ -1,0 +1,45 @@
+{
+  "kind": "collectionType",
+  "collectionName": "youtube_videos",
+  "info": {
+    "singularName": "youtube-video",
+    "pluralName": "youtube-videos",
+    "displayName": "Youtube Video",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "title": {
+      "type": "string"
+    },
+    "titleCover": {
+      "type": "string"
+    },
+    "agenda": {
+      "type": "text"
+    },
+    "chapters": {
+      "type": "text"
+    },
+    "note": {
+      "type": "text"
+    },
+    "articles": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::article.article"
+    },
+    "sponsers": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::sponser.sponser"
+    },
+    "orders": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::order.order"
+    }
+  }
+}

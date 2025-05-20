@@ -1,0 +1,51 @@
+{
+  "kind": "collectionType",
+  "collectionName": "available_hours",
+  "info": {
+    "singularName": "available-hour",
+    "pluralName": "available-hours",
+    "displayName": "Available Hour",
+    "description": "Define day-of-week and time ranges for availability"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "day": {
+      "type": "enumeration",
+      "enum": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "required": true
+    },
+    "startTime": {
+      "type": "time",
+      "required": true
+    },
+    "endTime": {
+      "type": "time",
+      "required": true
+    },
+    "timeZone": {
+      "type": "enumeration",
+      "enum": [
+        "UTC",
+        "Europe/London",
+        "Europe/Berlin",
+        "America/New_York",
+        "America/Los_Angeles",
+        "Asia/Tehran",
+        "Asia/Dubai",
+        "Asia/Tokyo",
+        "Australia/Sydney"
+      ],
+      "required": true
+    }
+  }
+}

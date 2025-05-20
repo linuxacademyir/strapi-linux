@@ -8,26 +8,14 @@
     "description": ""
   },
   "options": {
-    "draftAndPublish": true
+    "draftAndPublish": false
+  },
+  "pluginOptions": {
+    "revision": {
+      "disable": true
+    }
   },
   "attributes": {
-    "name": {
-      "type": "string"
-    },
-    "companyName": {
-      "type": "string"
-    },
-    "companyWebsite": {
-      "type": "string"
-    },
-    "companyLogo": {
-      "type": "media",
-      "multiple": false,
-      "required": false,
-      "allowedTypes": [
-        "images"
-      ]
-    },
     "price": {
       "type": "string"
     },
@@ -38,21 +26,22 @@
       "type": "string"
     },
     "note": {
-      "type": "string"
+      "type": "text"
     },
     "internalNote": {
-      "type": "string"
-    },
-    "phone": {
-      "type": "biginteger"
-    },
-    "email": {
-      "type": "email"
+      "type": "text"
     },
     "orderStatus": {
-      "type": "string"
+      "type": "enumeration",
+      "enum": [
+        "Payment initiated",
+        "Payment successful",
+        "Payment Failed",
+        "Payment Refunded"
+      ],
+      "default": "Payment initiated"
     },
-    "orderId": {
+    "transactionId": {
       "type": "string"
     },
     "package": {
@@ -60,6 +49,12 @@
       "relation": "manyToOne",
       "target": "api::package.package",
       "description": "One order is for one specific package"
+    },
+    "sponser": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sponser.sponser",
+      "inversedBy": "orders"
     }
   }
 }

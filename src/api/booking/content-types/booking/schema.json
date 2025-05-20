@@ -11,17 +11,11 @@
     "draftAndPublish": false
   },
   "attributes": {
-    "name": {
-      "type": "string",
-      "required": true
-    },
-    "email": {
-      "type": "email",
-      "required": true
-    },
-    "phone": {
-      "type": "string",
-      "required": true
+    "customer": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::customer.customer",
+      "inversedBy": "bookings"
     },
     "hours": {
       "type": "integer",
@@ -38,34 +32,40 @@
       "required": true,
       "min": 0
     },
-    "comment": {
+    "note": {
       "type": "text"
     },
-    "authority": {
-      "type": "string"
-    },
-    "message": {
-      "type": "string",
-      "default": "Payment initiated"
-    },
-    "ref_id": {
-      "type": "string"
-    },
-    "status": {
+    "bookingStatus": {
       "type": "enumeration",
       "enum": [
-        "pending_payment",
-        "paid",
-        "failed",
-        "cancelled"
+        "Payment initiated",
+        "Payment successful",
+        "Payment Failed",
+        "Payment Refunded",
+        "Meeting scheduled"
       ],
-      "default": "pending_payment"
+      "default": "Payment initiated"
     },
-    "payment_data": {
-      "type": "text"
-    },
-    "meeting_url": {
+    "transactionId": {
       "type": "string"
+    },
+    "meetingUrl": {
+      "type": "string"
+    },
+    "meetingStartDate": {
+      "type": "date"
+    },
+    "meetingStartTime": {
+      "type": "time"
+    },
+    "meetingEndDate": {
+      "type": "date"
+    },
+    "meetingEndTime": {
+      "type": "time"
+    },
+    "internalNote": {
+      "type": "text"
     }
   }
 }

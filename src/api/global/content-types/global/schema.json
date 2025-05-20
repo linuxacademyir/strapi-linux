@@ -42,6 +42,9 @@
       "allowedTypes": [
         "images"
       ]
+    },
+    "hourlyRate": {
+      "type": "string"
     }
   }
 }

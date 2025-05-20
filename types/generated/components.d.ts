@@ -62,15 +62,6 @@ export interface SharedSlider extends Struct.ComponentSchema {
   };
 }
 
-export interface ThankyouMedia extends Struct.ComponentSchema {
-  collectionName: 'components_thankyou_media';
-  info: {
-    displayName: 'media';
-    icon: 'alien';
-  };
-  attributes: {};
-}
-
 declare module '@strapi/strapi' {
   export module Public {
     export interface ComponentSchemas {
@@ -79,7 +70,6 @@ declare module '@strapi/strapi' {
       'shared.rich-text': SharedRichText;
       'shared.seo': SharedSeo;
       'shared.slider': SharedSlider;
-      'thankyou.media': ThankyouMedia;
     }
   }
 }

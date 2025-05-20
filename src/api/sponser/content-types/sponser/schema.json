@@ -8,13 +8,13 @@
     "description": ""
   },
   "options": {
-    "draftAndPublish": true
+    "draftAndPublish": false
   },
   "attributes": {
-    "name": {
+    "companyName": {
       "type": "string"
     },
-    "logo": {
+    "companyLogo": {
       "type": "media",
       "multiple": false,
       "required": false,
@@ -25,7 +25,38 @@
         "audios"
       ]
     },
-    "link": {
+    "companyWebsite": {
+      "type": "string"
+    },
+    "email": {
+      "type": "email"
+    },
+    "phone": {
+      "type": "string",
+      "required": false
+    },
+    "instagramId": {
+      "type": "string"
+    },
+    "active": {
+      "type": "boolean",
+      "default": false,
+      "required": true
+    },
+    "note": {
+      "type": "text"
+    },
+    "internalNote": {
+      "type": "text"
+    },
+    "orders": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::order.order",
+      "mappedBy": "sponser",
+      "description": "Orders associated with this sponsor"
+    },
+    "name": {
       "type": "string"
     }
   }

@@ -8,7 +8,7 @@ interface ZarinpalPaymentRequest {
   description: string;
   metadata?: {
     booking_id?: string | number;
-    comment?: string;
+    note?: string;
   };
 }
 
@@ -28,13 +28,16 @@ interface ZarinpalResponse<T> {
 }
 
 interface BookingData {
-  name: string;
-  email: string;
-  phone: string;
+  // Relation to an existing customer, or nested customer fields below
+  customer?: number | string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  // Booking fields
   hours: number | string;
   amount: number | string;
   price: number | string;
-  comment?: string;
+  note?: string;
 }
 
 export default factories.createCoreController('api::booking.booking', ({ strapi }) => ({
@@ -43,38 +46,67 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
     if (!process.env.ZARINPAL_MERCHANT_ID) {
       return ctx.badRequest('Missing environment variable: ZARINPAL_MERCHANT_ID');
     }
-    if (!process.env.ZARINPAL_CALLBACK_URL) {
-      return ctx.badRequest('Missing environment variable: ZARINPAL_CALLBACK_URL');
+    if (!process.env.ZARINPAL_CALLBACK_URL_BOOKINGS) {
+      return ctx.badRequest('Missing environment variable: ZARINPAL_CALLBACK_URL_BOOKINGS');
     }
     if (!process.env.ZARINPAL_BASE_URL) {
       return ctx.badRequest('Missing environment variable: ZARINPAL_BASE_URL');
     }
     try {
       const { data } = ctx.request.body as { data: BookingData };
-
-      // Validate required fields
-      if (!data.name || !data.email || !data.phone || !data.amount || !data.hours) {
-        return ctx.badRequest('Missing required fields');
+      // Ensure booking fields
+      if (!data.amount || !data.hours) {
+        return ctx.badRequest('Missing required fields: amount and hours are required');
       }
-
-      // Create booking record
+      // Determine customer: existing relation or lookup/create
+      let customerId = data.customer;
+      if (!customerId) {
+        if (!data.email) {
+          return ctx.badRequest('Missing customer email: required to lookup or create customer');
+        }
+        const existingCust = await strapi.entityService.findMany('api::customer.customer', {
+          filters: { email: data.email },
+          limit: 1,
+        });
+        if (existingCust.length > 0) {
+          customerId = (existingCust[0] as any).id;
+        } else {
+          if (!data.name || !data.phone) {
+            return ctx.badRequest('Missing customer details: name and phone are required to create a new customer');
+          }
+          const customerPayload: any = {
+            name: data.name,
+            email: data.email,
+            phone: data.phone,
+          };
+          const newCustomer = await strapi.entityService.create('api::customer.customer', {
+            data: customerPayload,
+          }) as any;
+          customerId = newCustomer.id;
+        }
+      }
+      // Create booking record with user relation
       const booking = await strapi.entityService.create('api::booking.booking', {
         data: {
-          ...data,
-          message: 'Payment initiated', // Use existing field instead of status
+          hours: data.hours,
+          amount: data.amount,
+          price: data.price,
+          note: data.note,
+          customer: customerId,
+          bookingStatus: 'Payment initiated',
         },
       });
 
       // Prepare payment request
+      // Build callback URL with bookingId for verification
+      const callbackBase = process.env.ZARINPAL_CALLBACK_URL_BOOKINGS!.replace(/\/+$/, '');
+      const callbackUrl = `${callbackBase}?bookingId=${booking.id}`;
       const paymentRequest: ZarinpalPaymentRequest = {
         merchant_id: process.env.ZARINPAL_MERCHANT_ID!,
-        amount: Math.floor(Number(data.amount) * 10), // Convert toman to rial
-        callback_url: process.env.ZARINPAL_CALLBACK_URL!,
-        description: process.env.ZARINPAL_DESCRIPTION!,
-        metadata: {
-          booking_id: booking.id,
-          comment: typeof data.comment === 'string' ? data.comment : undefined,
-        }
+        amount: Math.floor(Number(data.amount) * 10), // Convert to rial
+        callback_url: callbackUrl,
+        description: process.env.ZARINPAL_DESCRIPTION_BOOKINS!,
+        metadata: { booking_id: booking.id, note: typeof data.note === 'string' ? data.note : undefined },
       };
 
       // Call Zarinpal API
@@ -96,12 +128,6 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
         throw new Error(errMsg);
       }
       const authority = paymentData.authority as string;
-      await strapi.entityService.update('api::booking.booking', booking.id, {
-        data: {
-          authority,
-          message: `Payment initiated (code: ${paymentData.code})`
-        }
-      });
       const isSandbox = baseUrl.includes('sandbox');
       const redirectBase = isSandbox ? 'https://sandbox.zarinpal.com' : 'https://www.zarinpal.com';
       return {
@@ -137,82 +163,91 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
   },
 
   async verify(ctx) {
+    // Extract bookingId from query params
+    const bookingIdParam = ctx.query.bookingId || (ctx.query.booking_id as string | undefined);
+    const bookingId = Array.isArray(bookingIdParam) ? bookingIdParam[0] : bookingIdParam;
+    if (!bookingId) {
+      return ctx.badRequest('Missing bookingId query parameter');
+    }
+    // Fetch booking to get amount and ensure existence
+    const booking = await strapi.entityService.findOne('api::booking.booking', bookingId);
+    if (!booking) {
+      return ctx.notFound(`Booking not found for id=${bookingId}`);
+    }
+    // Check payment status param
+    const statusParam = ctx.query.Status || (ctx.query.status as string | undefined);
+    const Status = Array.isArray(statusParam) ? statusParam[0] : statusParam;
+    if (Status !== 'OK') {
+      await strapi.entityService.update('api::booking.booking', bookingId, { data: { bookingStatus: 'Payment Failed' } });
+      return { success: false, booking };
+    }
+    // Validate Zarinpal config
+    if (!process.env.ZARINPAL_MERCHANT_ID || !process.env.ZARINPAL_BASE_URL) {
+      return ctx.badRequest('Missing Zarinpal configuration');
+    }
     try {
-      const statusParam = ctx.query.Status || (ctx.query.status as string | undefined);
-      const authorityParam = ctx.query.Authority || (ctx.query.authority as string | undefined);
-      const Status = Array.isArray(statusParam) ? statusParam[0] : statusParam;
-      const Authority = Array.isArray(authorityParam) ? authorityParam[0] : authorityParam;
-
-      if (!Authority) {
+      // Call Zarinpal verify API
+      const amount = Math.floor(Number((booking as any).amount) * 10);
+      const authority = Array.isArray(ctx.query.Authority)
+        ? ctx.query.Authority[0]
+        : (ctx.query.Authority as string) || (ctx.query.authority as string | undefined);
+      if (!authority) {
         return ctx.badRequest('Missing Authority parameter');
       }
-
-      // Find booking by authority
-      const bookings = await strapi.entityService.findMany('api::booking.booking', {
-        filters: { authority: Authority },
-        limit: 1
-      });
-
-      if (!bookings || bookings.length === 0) {
-        return ctx.notFound('Booking not found');
-      }
-
-      const booking = bookings[0];
-
-      // Only verify if payment was successful
-      if (Status === 'OK') {
-        const verifyRequest = {
-          merchant_id: process.env.ZARINPAL_MERCHANT_ID!,
-          amount: Math.floor(Number(booking.amount) * 10),
-          authority: Authority
-        };
-        const baseUrl = process.env.ZARINPAL_BASE_URL!.replace(/\/+$/, '');
-        const verifyResponse = await axios.post<any>(
-          `${baseUrl}/pg/v4/payment/verify.json`,
-          verifyRequest,
-          {
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        const verifyData = verifyResponse.data.data;
-        const verifyError = verifyResponse.data.errors;
-        if (!verifyData) {
-          const errMsg = verifyError?.message || 'Verification failed';
-          throw new Error(errMsg);
-        }
-        const success = verifyData.code === 100;
-        const refId = verifyData.ref_id;
-        const updatedBooking = await strapi.entityService.update('api::booking.booking', booking.id, {
-          data: {
-            status: success ? 'paid' : 'failed',
-            ref_id: success && refId != null ? String(refId) : null,
-            message: success ? 'Payment successful' : `Payment failed (code: ${verifyData.code})`,
-            payment_data: JSON.stringify(verifyResponse.data)
-          }
-        });
-        return { success, booking: updatedBooking };
-      }
-      await strapi.entityService.update('api::booking.booking', booking.id, {
-        data: {
-          status: 'failed',
-          message: `Payment was not completed (Status: ${Status})`
-        }
-      });
-      return {
-        success: false,
-        message: 'Payment was not completed'
+      const verifyRequest: ZarinpalVerifyRequest = {
+        merchant_id: process.env.ZARINPAL_MERCHANT_ID!,
+        amount,
+        authority,
       };
+      const baseUrl = process.env.ZARINPAL_BASE_URL!.replace(/\/+$/, '');
+      const verifyResponse = await axios.post<any>(
+        `${baseUrl}/pg/v4/payment/verify.json`,
+        verifyRequest,
+        { headers: { Accept: 'application/json', 'Content-Type': 'application/json' } }
+      );
+      const verifyData = verifyResponse.data.data;
+      if (!verifyData) {
+        throw new Error(verifyResponse.data.errors?.message || 'Verification failed');
+      }
+      const success = verifyData.code === 100;
+      const refId = verifyData.ref_id;
+      // Update booking status and transactionId
+      await strapi.entityService.update('api::booking.booking', bookingId, {
+        data: {
+          bookingStatus: success ? 'Payment successful' : 'Payment Failed',
+          transactionId: success && refId != null ? String(refId) : null,
+        },
+      });
+      const resultBooking = await strapi.entityService.findOne('api::booking.booking', bookingId, {
+        populate: ['customer'],
+        locale: 'all',
+      });
+      return { success, booking: resultBooking };
     } catch (error: any) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
         const url = error.config?.url;
         strapi.log.error(`Zarinpal verify endpoint not found (404) at ${url}`);
-        return ctx.badRequest(`Zarinpal verify endpoint not found (404) at ${url}. Please check ZARINPAL_BASE_URL environment variable.`);
+        return ctx.badRequest(`Zarinpal verify endpoint not found (404) at ${url}`);
       }
       strapi.log.error('Payment verification error:', error);
       return ctx.badRequest(error.message || 'Payment verification failed');
+    }
+  },
+  async refund(ctx) {
+    try {
+      const { id } = ctx.params;
+      const booking = await strapi.entityService.findOne('api::booking.booking', id);
+      if (!booking) {
+        return ctx.notFound(`Booking not found for id=${id}`);
+      }
+      await strapi.entityService.update('api::booking.booking', id, {
+        data: { bookingStatus: 'Payment Refunded' }
+      });
+      const resultBooking = await strapi.entityService.findOne('api::booking.booking', id);
+      return { data: resultBooking };
+    } catch (error: any) {
+      strapi.log.error('Booking refund error:', error);
+      return ctx.badRequest(error.message || 'Refund failed');
     }
   },
 
@@ -267,13 +302,12 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
    * Proxy to Google Calendar events.insert API using OAuth2 refresh token
    */
   async createEvent(ctx) {
-    // Expect bookingId and the Google event payload
+    // Expect bookingId, Google event payload, and optional user data
     const { bookingId, event: eventBody } = ctx.request.body as any;
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REFRESH_TOKEN) {
       return ctx.badRequest('Missing Google API credentials (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN)');
     }
     try {
-      // Obtain access token via refresh token
       const tokenRes = await axios.post(
         'https://oauth2.googleapis.com/token',
         new URLSearchParams({
@@ -304,13 +338,38 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
         const ep = evData.conferenceData.entryPoints.find((e: any) => e.entryPointType === 'video');
         meetLink = ep?.uri;
       }
-      // Update the booking record with the meeting URL
+      // Update the booking record with the meeting details
       if (bookingId && meetLink) {
-        await strapi.entityService.update('api::booking.booking', bookingId, {
-          data: {
-            meeting_url: meetLink,
-            message: 'Meeting scheduled'
+        const isoStart = evData.start?.dateTime ?? evData.start?.date;
+        const isoEnd = evData.end?.dateTime ?? evData.end?.date;
+        let meetingStartDate = null;
+        let meetingStartTime = null;
+        if (isoStart) {
+          const m = isoStart.match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}:\d{2}))?/);
+          if (m) {
+            meetingStartDate = m[1];
+            meetingStartTime = m[2] ? `${m[2]}.000` : '';
           }
+        }
+        let meetingEndDate = null;
+        let meetingEndTime = null;
+        if (isoEnd) {
+          const m2 = isoEnd.match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}:\d{2}))?/);
+          if (m2) {
+            meetingEndDate = m2[1];
+            meetingEndTime = m2[2] ? `${m2[2]}.000` : '';
+          }
+        }
+        const updateData: any = {
+          meetingUrl: meetLink,
+          bookingStatus: 'Meeting scheduled',
+          meetingStartDate,
+          meetingStartTime,
+          meetingEndDate,
+          meetingEndTime,
+        };
+        await strapi.entityService.update('api::booking.booking', bookingId, {
+          data: updateData,
         });
       }
       return evData;

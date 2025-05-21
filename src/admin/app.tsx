@@ -10,10 +10,10 @@ export default {
     locales: [],
   },
   bootstrap(app: StrapiApp) {
-    // Inject a custom cell formatter for the 'meeting_url' column
+    // Inject a custom cell formatter for the 'meetingUrl' column
     app.registerHook(INJECT_COLUMN_IN_TABLE, ({ displayedHeaders, layout }) => {
       const updated = displayedHeaders.map(header => {
-        if (header.name === 'meeting_url') {
+        if (header.name === 'meetingUrl') {
           return {
             ...header,
             // Render the URL as a clickable link

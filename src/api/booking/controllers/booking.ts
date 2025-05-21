@@ -334,8 +334,14 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
           });
         }
       }
+      const busySlots = busyArray.map((b: any) => ({
+        start: formatDateTimeWithOffset(new Date(b.start), timeZone),
+        end: formatDateTimeWithOffset(new Date(b.end), timeZone),
+      }));
       return {
         busy: busyArray,
+        busyCount: busySlots.length,
+        busySlots,
         freeCount: slots.length,
         freeSlots: slots,
       };

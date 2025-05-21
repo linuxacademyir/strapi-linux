@@ -43,7 +43,6 @@ export default {
       const contentType = editLayout.settings?.displayName;
       let disabledFields: string[];
       if (contentType === 'Booking') {
-        // Only disable on existing bookings; allow editing when creating new
         const pathSegments = window.location.pathname.split('/');
         const lastSegment = pathSegments[pathSegments.length - 1];
         const isCreate = lastSegment === 'create';
@@ -51,7 +50,6 @@ export default {
           ? []
           : ['customer', 'hours', 'price', 'amount', 'transactionId', 'note'];
       } else if (contentType === 'Order') {
-        // Only disable on existing orders; allow editing when creating new
         const pathSegments = window.location.pathname.split('/');
         const lastSegment = pathSegments[pathSegments.length - 1];
         const isCreate = lastSegment === 'create';
@@ -59,11 +57,12 @@ export default {
           ? []
           : ['sponser', 'package', 'price', 'amount', 'quantity', 'transactionId', 'note'];
       } else if (contentType === 'Sponser') {
-        // Disable the orders relation in Sponser entries
         disabledFields = ['orders'];
       } else if (contentType === 'Customer') {
-        // Disable the bookings relation in Customer entries
         disabledFields = ['bookings'];
+      } else if (contentType === 'Donation') {
+        // Disable all fields for Donation entries (both create and edit views)
+        disabledFields = ['amount', 'name', 'email', 'mobile', 'donationStatus', 'transactionId'];
       } else {
         return { layout: editLayout, query };
       }

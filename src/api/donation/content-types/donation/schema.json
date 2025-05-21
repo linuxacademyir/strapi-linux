@@ -1,0 +1,41 @@
+{
+  "kind": "collectionType",
+  "collectionName": "donations",
+  "info": {
+    "singularName": "donation",
+    "pluralName": "donations",
+    "displayName": "Donation"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "amount": {
+      "type": "decimal",
+      "required": true,
+      "min": 0
+    },
+    "name": {
+      "type": "string"
+    },
+    "email": {
+      "type": "email"
+    },
+    "mobile": {
+      "type": "string"
+    },
+    "donationStatus": {
+      "type": "enumeration",
+      "enum": [
+        "Payment initiated",
+        "Payment successful",
+        "Payment Failed",
+        "Payment Refunded"
+      ],
+      "default": "Payment initiated"
+    },
+    "transactionId": {
+      "type": "string"
+    }
+  }
+}

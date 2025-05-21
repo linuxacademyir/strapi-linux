@@ -45,6 +45,9 @@
     },
     "hourlyRate": {
       "type": "string"
+    },
+    "primaryCalendarId": {
+      "type": "string"
     }
   }
 }

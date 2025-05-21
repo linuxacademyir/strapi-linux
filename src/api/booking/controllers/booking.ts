@@ -273,7 +273,8 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
       );
       const accessToken = tokenRes.data.access_token;
-      const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
+      const globalSettings = await strapi.entityService.findMany('api::global.global', { fields: ['primaryCalendarId'] });
+      const calendarId = globalSettings?.primaryCalendarId || process.env.GOOGLE_CALENDAR_ID || 'primary';
       // Call freeBusy API
       const fbResp = await axios.post(
         'https://www.googleapis.com/calendar/v3/freeBusy',
@@ -290,7 +291,54 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
           },
         }
       );
-      return fbResp.data;
+      const fbData = fbResp.data;
+      const busyArray = fbData.calendars?.[calendarId]?.busy || [];
+      const busyIntervals = busyArray.map((b: any) => ({
+        start: new Date(b.start).getTime(),
+        end: new Date(b.end).getTime(),
+      }));
+      const startMs = new Date(timeMin).getTime();
+      const endMs = new Date(timeMax).getTime();
+      const formatDateTimeWithOffset = (date: Date, tz: string): string => {
+        const formatter = new Intl.DateTimeFormat('sv-SE', {
+          timeZone: tz,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hourCycle: 'h23',
+          timeZoneName: 'shortOffset',
+        });
+        const parts = formatter.formatToParts(date);
+        const dp: Record<string, string> = {};
+        let offset = '';
+        for (const part of parts) {
+          if (['year', 'month', 'day', 'hour', 'minute', 'second'].includes(part.type)) {
+            dp[part.type] = part.value;
+          } else if (part.type === 'timeZoneName') {
+            offset = part.value.replace(/^GMT/, '');
+          }
+        }
+        return `${dp.year}-${dp.month}-${dp.day}T${dp.hour}:${dp.minute}:${dp.second}${offset}`;
+      };
+      const slots: Array<{ start: string; end: string }> = [];
+      for (let slotStart = startMs; slotStart + 3600000 <= endMs; slotStart += 3600000) {
+        const slotEnd = slotStart + 3600000;
+        const overlap = busyIntervals.some(({ start, end }) => start < slotEnd && end > slotStart);
+        if (!overlap) {
+          slots.push({
+            start: formatDateTimeWithOffset(new Date(slotStart), timeZone),
+            end: formatDateTimeWithOffset(new Date(slotEnd), timeZone),
+          });
+        }
+      }
+      return {
+        busy: busyArray,
+        freeCount: slots.length,
+        freeSlots: slots,
+      };
     } catch (err: any) {
       strapi.log.error('Google freeBusy error:', err);
       return ctx.badRequest(err.message || 'Google freeBusy API error');

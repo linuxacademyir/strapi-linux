@@ -46,16 +46,19 @@ interface OrderData {
 
 export default factories.createCoreController('api::order.order', ({ strapi }) => ({
   async create(ctx) {
-    if (!process.env.ZARINPAL_MERCHANT_ID) {
-      return ctx.badRequest('Missing environment variable: ZARINPAL_MERCHANT_ID');
+    // Load Zarinpal config from global
+    const globalConfig = await strapi.entityService.findOne('api::global.global', 1, { fields: ['ZarinpalMerchantId', 'ZarinpalBaseUrl'] });
+    const merchantId = globalConfig?.ZarinpalMerchantId || process.env.ZARINPAL_MERCHANT_ID;
+    const baseUrl = (globalConfig?.ZarinpalBaseUrl || process.env.ZARINPAL_BASE_URL)?.replace(/\/+$/, '');
+    if (!merchantId) {
+      return ctx.badRequest('Missing Zarinpal merchant ID (set in global or env)');
     }
-    // Support distinct callback URL for orders, falling back to generic if not provided
     const callbackUrlOrders = process.env.ZARINPAL_CALLBACK_URL_ORDERS ?? process.env.ZARINPAL_CALLBACK_URL;
     if (!callbackUrlOrders) {
       return ctx.badRequest('Missing environment variable: ZARINPAL_CALLBACK_URL_ORDERS or ZARINPAL_CALLBACK_URL');
     }
-    if (!process.env.ZARINPAL_BASE_URL) {
-      return ctx.badRequest('Missing environment variable: ZARINPAL_BASE_URL');
+    if (!baseUrl) {
+      return ctx.badRequest('Missing Zarinpal base URL (set in global or env)');
     }
     try {
       const { data } = ctx.request.body as { data: OrderData };
@@ -143,7 +146,7 @@ export default factories.createCoreController('api::order.order', ({ strapi }) =
       const callbackBase = callbackUrlOrders!.replace(/\/+$/, '');
       const callbackUrl = `${callbackBase}?orderId=${order.id}`;
       const paymentRequest: ZarinpalPaymentRequest = {
-        merchant_id: process.env.ZARINPAL_MERCHANT_ID!,
+        merchant_id: merchantId,
         amount: Math.floor(Number(finalAmount) * 10),
         callback_url: callbackUrl,
         description: process.env.ZARINPAL_DESCRIPTION_ORDERS!,
@@ -153,7 +156,6 @@ export default factories.createCoreController('api::order.order', ({ strapi }) =
         },
       };
 
-      const baseUrl = process.env.ZARINPAL_BASE_URL!.replace(/\/+$/, '');
       const paymentResponse = await axios.post<any>(
         `${baseUrl}/pg/v4/payment/request.json`,
         paymentRequest,
@@ -220,9 +222,12 @@ export default factories.createCoreController('api::order.order', ({ strapi }) =
       await strapi.entityService.update('api::order.order', orderId, { data: { orderStatus: 'Payment Failed' } });
       return { success: false, order };
     }
-    // Validate Zarinpal config
-    if (!process.env.ZARINPAL_MERCHANT_ID || !process.env.ZARINPAL_BASE_URL) {
-      return ctx.badRequest('Missing Zarinpal configuration');
+    // Load Zarinpal config from global
+    const globalConfig = await strapi.entityService.findOne('api::global.global', 1, { fields: ['ZarinpalMerchantId', 'ZarinpalBaseUrl'] });
+    const merchantId = globalConfig?.ZarinpalMerchantId || process.env.ZARINPAL_MERCHANT_ID;
+    const baseUrl = (globalConfig?.ZarinpalBaseUrl || process.env.ZARINPAL_BASE_URL)?.replace(/\/+$/, '');
+    if (!merchantId || !baseUrl) {
+      return ctx.badRequest('Missing Zarinpal configuration (set in global or env)');
     }
     try {
       // Extract authority param
@@ -233,11 +238,10 @@ export default factories.createCoreController('api::order.order', ({ strapi }) =
       }
       // Call Zarinpal verify API
       const verifyRequest: ZarinpalVerifyRequest = {
-        merchant_id: process.env.ZARINPAL_MERCHANT_ID!,
+        merchant_id: merchantId,
         amount: Math.floor(Number((order as any).amount) * 10),
         authority,
       };
-      const baseUrl = process.env.ZARINPAL_BASE_URL!.replace(/\/+$/, '');
       const verifyResponse = await axios.post<any>(
         `${baseUrl}/pg/v4/payment/verify.json`,
         verifyRequest,

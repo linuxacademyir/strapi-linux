@@ -9,8 +9,19 @@ import axios from 'axios';
 export default factories.createCoreController('api::donation.donation', ({ strapi }) => ({
   async create(ctx) {
     const { amount, name, email, mobile } = ctx.request.body;
-    const merchantId = process.env.ZARINPAL_MERCHANT_ID;
+    const globalConfig = await strapi.entityService.findOne('api::global.global', 1, { fields: ['ZarinpalMerchantId', 'ZarinpalBaseUrl'] });
+    const merchantId = globalConfig?.ZarinpalMerchantId || process.env.ZARINPAL_MERCHANT_ID;
+    const baseUrl = (globalConfig?.ZarinpalBaseUrl || process.env.ZARINPAL_BASE_URL)?.replace(/\/+$/, '');
     const description = process.env.ZARINPAL_DESCRIPTION_DONATION;
+    if (!merchantId) {
+      ctx.throw(400, 'Missing Zarinpal merchant ID (set in global or env)');
+    }
+    if (!process.env.ZARINPAL_CALLBACK_URL_DONATIONS) {
+      ctx.throw(400, 'Missing environment variable: ZARINPAL_CALLBACK_URL_DONATIONS');
+    }
+    if (!baseUrl) {
+      ctx.throw(400, 'Missing Zarinpal base URL (set in global or env)');
+    }
     try {
       const donation = await strapi.entityService.create('api::donation.donation', {
         data: { amount, name, email, mobile, donationStatus: 'Payment initiated' },
@@ -24,14 +35,14 @@ export default factories.createCoreController('api::donation.donation', ({ strap
         metadata: { email, mobile },
       };
       const response = await axios.post(
-        `${process.env.ZARINPAL_BASE_URL}/pg/v4/payment/request.json`,
+        `${baseUrl}/pg/v4/payment/request.json`,
         payload,
         { headers: { 'Content-Type': 'application/json' } }
       );
       const data = response.data.data;
       if (data.code === 100) {
         return {
-          paymentUrl: `${process.env.ZARINPAL_BASE_URL}/pg/StartPay/${data.authority}`,
+          paymentUrl: `${baseUrl}/pg/StartPay/${data.authority}`,
           orderId: donation.id,
         };
       }
@@ -48,11 +59,16 @@ export default factories.createCoreController('api::donation.donation', ({ strap
     const id = parseInt(donationId as string, 10);
     const existing = await strapi.entityService.findOne('api::donation.donation', id, {});
     if (!existing) ctx.throw(404, 'Donation not found');
+    const globalConfig = await strapi.entityService.findOne('api::global.global', 1, { fields: ['ZarinpalMerchantId', 'ZarinpalBaseUrl'] });
+    const merchantId = globalConfig?.ZarinpalMerchantId || process.env.ZARINPAL_MERCHANT_ID;
+    const baseUrl = (globalConfig?.ZarinpalBaseUrl || process.env.ZARINPAL_BASE_URL)?.replace(/\/+$/, '');
+    if (!merchantId || !baseUrl) {
+      ctx.throw(400, 'Missing Zarinpal configuration (set in global or env)');
+    }
     try {
-      const merchantId = process.env.ZARINPAL_MERCHANT_ID;
       const verifyPayload = { merchant_id: merchantId, authority: Authority, amount: existing.amount };
       const response = await axios.post(
-        `${process.env.ZARINPAL_BASE_URL}/pg/v4/payment/verify.json`,
+        `${baseUrl}/pg/v4/payment/verify.json`,
         verifyPayload,
         { headers: { 'Content-Type': 'application/json' } }
       );

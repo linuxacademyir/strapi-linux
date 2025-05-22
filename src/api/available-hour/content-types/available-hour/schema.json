@@ -31,6 +31,10 @@
     "timeMax": {
       "type": "time",
       "required": true
+    },
+    "dayOff": {
+      "type": "boolean",
+      "default": false
     }
   }
 }

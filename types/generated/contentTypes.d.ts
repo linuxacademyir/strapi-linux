@@ -475,6 +475,7 @@ export interface ApiAvailableHourAvailableHour
       ]
     > &
       Schema.Attribute.Required;
+    dayOff: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -855,6 +856,10 @@ export interface ApiGlobalGlobal extends Struct.SingleTypeSchema {
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    ZarinpalBaseUrl: Schema.Attribute.Enumeration<
+      ['https://sandbox.zarinpal.com', 'https://payment.zarinpal.com']
+    >;
+    ZarinpalMerchantId: Schema.Attribute.String;
   };
 }
 

@@ -99,6 +99,16 @@
         "Africa/Lagos",
         "Africa/Cairo"
       ]
+    },
+    "ZarinpalMerchantId": {
+      "type": "string"
+    },
+    "ZarinpalBaseUrl": {
+      "type": "enumeration",
+      "enum": [
+        "https://sandbox.zarinpal.com",
+        "https://payment.zarinpal.com"
+      ]
     }
   }
 }

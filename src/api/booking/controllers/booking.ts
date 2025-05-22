@@ -1,5 +1,6 @@
 import { factories } from '@strapi/strapi';
 import axios from 'axios';
+const { DateTime } = require('luxon');
 
 interface ZarinpalPaymentRequest {
   merchant_id: string;
@@ -47,15 +48,18 @@ interface BookingWithCoupon {
 
 export default factories.createCoreController('api::booking.booking', ({ strapi }) => ({
   async create(ctx) {
-    // Validate Zarinpal configuration
-    if (!process.env.ZARINPAL_MERCHANT_ID) {
-      return ctx.badRequest('Missing environment variable: ZARINPAL_MERCHANT_ID');
+    // Load Zarinpal config from global
+    const globalConfig = await strapi.entityService.findOne('api::global.global', 1, { fields: ['ZarinpalMerchantId', 'ZarinpalBaseUrl'] });
+    const merchantId = globalConfig?.ZarinpalMerchantId || process.env.ZARINPAL_MERCHANT_ID;
+    const baseUrl = (globalConfig?.ZarinpalBaseUrl || process.env.ZARINPAL_BASE_URL)?.replace(/\/+$/, '');
+    if (!merchantId) {
+      return ctx.badRequest('Missing Zarinpal merchant ID (set in global or env)');
     }
     if (!process.env.ZARINPAL_CALLBACK_URL_BOOKINGS) {
       return ctx.badRequest('Missing environment variable: ZARINPAL_CALLBACK_URL_BOOKINGS');
     }
-    if (!process.env.ZARINPAL_BASE_URL) {
-      return ctx.badRequest('Missing environment variable: ZARINPAL_BASE_URL');
+    if (!baseUrl) {
+      return ctx.badRequest('Missing Zarinpal base URL (set in global or env)');
     }
     try {
       const { data } = ctx.request.body as { data: BookingData & { couponCode?: string } };
@@ -133,7 +137,7 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
       const callbackBase = process.env.ZARINPAL_CALLBACK_URL_BOOKINGS!.replace(/\/+$/, '');
       const callbackUrl = `${callbackBase}?bookingId=${booking.id}`;
       const paymentRequest: ZarinpalPaymentRequest = {
-        merchant_id: process.env.ZARINPAL_MERCHANT_ID!,
+        merchant_id: merchantId,
         amount: Math.floor(Number(finalAmount) * 10), // Convert to rial
         callback_url: callbackUrl,
         description: process.env.ZARINPAL_DESCRIPTION_BOOKINS!,
@@ -141,7 +145,6 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
       };
 
       // Call Zarinpal API
-      const baseUrl = process.env.ZARINPAL_BASE_URL!.replace(/\/+$/, '');
       const paymentResponse = await axios.post<any>(
         `${baseUrl}/pg/v4/payment/request.json`,
         paymentRequest,
@@ -212,9 +215,12 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
       await strapi.entityService.update('api::booking.booking', bookingId, { data: { bookingStatus: 'Payment Failed' } });
       return { success: false, booking };
     }
-    // Validate Zarinpal config
-    if (!process.env.ZARINPAL_MERCHANT_ID || !process.env.ZARINPAL_BASE_URL) {
-      return ctx.badRequest('Missing Zarinpal configuration');
+    // Load Zarinpal config from global
+    const globalConfig = await strapi.entityService.findOne('api::global.global', 1, { fields: ['ZarinpalMerchantId', 'ZarinpalBaseUrl'] });
+    const merchantId = globalConfig?.ZarinpalMerchantId || process.env.ZARINPAL_MERCHANT_ID;
+    const baseUrl = (globalConfig?.ZarinpalBaseUrl || process.env.ZARINPAL_BASE_URL)?.replace(/\/+$/, '');
+    if (!merchantId || !baseUrl) {
+      return ctx.badRequest('Missing Zarinpal configuration (set in global or env)');
     }
     try {
       // Call Zarinpal verify API
@@ -226,11 +232,10 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
         return ctx.badRequest('Missing Authority parameter');
       }
       const verifyRequest: ZarinpalVerifyRequest = {
-        merchant_id: process.env.ZARINPAL_MERCHANT_ID!,
+        merchant_id: merchantId,
         amount,
         authority,
       };
-      const baseUrl = process.env.ZARINPAL_BASE_URL!.replace(/\/+$/, '');
       const verifyResponse = await axios.post<any>(
         `${baseUrl}/pg/v4/payment/verify.json`,
         verifyRequest,
@@ -337,10 +342,23 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
      * Proxy to Google Calendar freeBusy API using OAuth2 refresh token
      */
     async freeBusy(ctx) {
-      const { timeMin, timeMax, timeZone } = ctx.request.body;
+      let { timeMin, timeMax, timeZone, date } = ctx.request.body;
 
-      const iso8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$/;
-      if (!iso8601.test(timeMin) || !iso8601.test(timeMax)) {
+      // If only date is provided, or timeZone is missing, load from global
+      const globalSettings = await strapi.entityService.findOne('api::global.global', 1, { fields: ['CalendarTimeZone'] });
+      if (!timeZone) {
+        timeZone = globalSettings?.CalendarTimeZone || 'Asia/Tehran';
+      }
+      if (date && (!timeMin || !timeMax)) {
+        // Use Luxon to get correct ISO with offset
+        const dayStart = DateTime.fromISO(date, { zone: timeZone }).startOf('day');
+        const dayEnd = DateTime.fromISO(date, { zone: timeZone }).endOf('day');
+        timeMin = dayStart.toISO(); // e.g. 2025-05-29T00:00:00.000+03:30
+        timeMax = dayEnd.toISO();   // e.g. 2025-05-29T23:59:59.999+03:30
+      }
+
+      const iso8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$/;
+      if (!timeMin || !timeMax || !iso8601.test(timeMin) || !iso8601.test(timeMax)) {
         return ctx.badRequest('Invalid timeMin or timeMax format. Expected ISO 8601 format.');
       }
 
@@ -380,6 +398,12 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
           : [{ id: process.env.GOOGLE_CALENDAR_ID || 'primary' }];
 
         // Query Google FreeBusy
+        strapi.log.info('Google freeBusy payload:', {
+          timeMin,
+          timeMax,
+          timeZone,
+          items: itemsToFetch
+        });
         const fbResp = await axios.post(
           'https://www.googleapis.com/calendar/v3/freeBusy',
           { timeMin, timeMax, timeZone, items: itemsToFetch },
@@ -455,14 +479,18 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
         // Free slots: only those within available hours and not busy
         // Fetch available hours from Strapi
         const allAvails = await strapi.entityService.findMany('api::available-hour.available-hour', {});
-        const windowsByDay: { [key: string]: Array<{ startTime: string; endTime: string }> } = {};
+        const windowsByDay: { [key: string]: Array<{ startTime: string; endTime: string; dayOff?: boolean }> } = {};
+        const dayOffByDay: { [key: string]: boolean } = {};
         for (const avail of allAvails) {
           if (avail.day) {
             const dayOfWeek = avail.day.toLowerCase();
             if (!windowsByDay[dayOfWeek]) {
               windowsByDay[dayOfWeek] = [];
             }
-            windowsByDay[dayOfWeek].push({ startTime: avail.timeMin as string, endTime: avail.timeMax as string });
+            windowsByDay[dayOfWeek].push({ startTime: avail.timeMin as string, endTime: avail.timeMax as string, dayOff: (avail as any).dayOff });
+            if ((avail as any).dayOff) {
+              dayOffByDay[dayOfWeek] = true;
+            }
           }
         }
         const weekdayFormatter = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone });
@@ -470,6 +498,12 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
         const end = new Date(timeMax);
         while (current < end) {
           const localWeekday = weekdayFormatter.format(current).toLowerCase();
+          // If dayOff is set for this day, skip free slots
+          if (dayOffByDay[localWeekday]) {
+            current.setUTCDate(current.getUTCDate() + 1);
+            current.setUTCHours(0, 0, 0, 0);
+            continue;
+          }
           const windows = windowsByDay[localWeekday] || [];
           for (const window of windows) {
             const [startHour, startMinute] = window.startTime.split(':').map(Number);
@@ -520,6 +554,10 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
           freeSlots: dedupeSlots(freeSlots),
         };
       } catch (err: any) {
+        if (err.response) {
+          strapi.log.error('Google freeBusy error:', err.response.data);
+          return ctx.badRequest(JSON.stringify(err.response.data));
+        }
         strapi.log.error('Google freeBusy error:', err);
         return ctx.badRequest(err.message || 'Google freeBusy API error');
       }

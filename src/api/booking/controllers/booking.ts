@@ -40,6 +40,11 @@ interface BookingData {
   note?: string;
 }
 
+interface BookingWithCoupon {
+  coupon?: { id: number; usedCount?: number };
+  // Add other fields as needed
+}
+
 export default factories.createCoreController('api::booking.booking', ({ strapi }) => ({
   async create(ctx) {
     // Validate Zarinpal configuration
@@ -53,10 +58,34 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
       return ctx.badRequest('Missing environment variable: ZARINPAL_BASE_URL');
     }
     try {
-      const { data } = ctx.request.body as { data: BookingData };
+      const { data } = ctx.request.body as { data: BookingData & { couponCode?: string } };
       // Ensure booking fields
       if (!data.amount || !data.hours) {
         return ctx.badRequest('Missing required fields: amount and hours are required');
+      }
+      // Coupon logic
+      let discount = 0;
+      let couponId = null;
+      if (data.couponCode) {
+        const coupons = await strapi.entityService.findMany('api::coupon.coupon', {
+          filters: { code: data.couponCode, isActive: true, applicableTo: 'bookings' },
+          limit: 1,
+        });
+        if (!coupons.length) return ctx.badRequest('Invalid or inactive coupon');
+        const c = coupons[0];
+        // Validate date
+        const now = new Date();
+        if (c.startDate && new Date(c.startDate) > now) return ctx.badRequest('Coupon not started yet');
+        if (c.endDate && new Date(c.endDate) < now) return ctx.badRequest('Coupon expired');
+        if (c.usageLimit && c.usedCount && c.usedCount >= c.usageLimit) return ctx.badRequest('Coupon usage limit reached');
+        if (c.minOrderAmount && Number(data.amount) < c.minOrderAmount) return ctx.badRequest('Order amount below coupon minimum');
+        // Calculate discount
+        if (c.type === 'percentage') {
+          discount = Number(data.amount) * Number(c.value) / 100;
+        } else if (c.type === 'fixed') {
+          discount = Number(c.value);
+        }
+        couponId = c.id;
       }
       // Determine customer: existing relation or lookup/create
       let customerId = data.customer;
@@ -85,15 +114,17 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
           customerId = newCustomer.id;
         }
       }
-      // Create booking record with user relation
+      // Create booking record with user relation and coupon
+      const finalAmount = Math.max(0, Number(data.amount) - discount);
       const booking = await strapi.entityService.create('api::booking.booking', {
         data: {
           hours: data.hours,
-          amount: data.amount,
+          amount: finalAmount,
           price: data.price,
           note: data.note,
           customer: customerId,
           bookingStatus: 'Payment initiated',
+          coupon: couponId,
         },
       });
 
@@ -103,7 +134,7 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
       const callbackUrl = `${callbackBase}?bookingId=${booking.id}`;
       const paymentRequest: ZarinpalPaymentRequest = {
         merchant_id: process.env.ZARINPAL_MERCHANT_ID!,
-        amount: Math.floor(Number(data.amount) * 10), // Convert to rial
+        amount: Math.floor(Number(finalAmount) * 10), // Convert to rial
         callback_url: callbackUrl,
         description: process.env.ZARINPAL_DESCRIPTION_BOOKINS!,
         metadata: { booking_id: booking.id, note: typeof data.note === 'string' ? data.note : undefined },
@@ -170,7 +201,7 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
       return ctx.badRequest('Missing bookingId query parameter');
     }
     // Fetch booking to get amount and ensure existence
-    const booking = await strapi.entityService.findOne('api::booking.booking', bookingId);
+    const booking = await strapi.entityService.findOne('api::booking.booking', bookingId, { populate: ['coupon'] }) as any;
     if (!booking) {
       return ctx.notFound(`Booking not found for id=${bookingId}`);
     }
@@ -218,6 +249,12 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
           transactionId: success && refId != null ? String(refId) : null,
         },
       });
+      // Increment coupon usage if applicable
+      if (success && booking.coupon && booking.coupon.id) {
+        await strapi.entityService.update('api::coupon.coupon', booking.coupon.id, {
+          data: { usedCount: (booking.coupon.usedCount || 0) + 1 },
+        });
+      }
       const resultBooking = await strapi.entityService.findOne('api::booking.booking', bookingId, {
         populate: ['customer'],
         locale: 'all',
@@ -300,210 +337,193 @@ export default factories.createCoreController('api::booking.booking', ({ strapi 
      * Proxy to Google Calendar freeBusy API using OAuth2 refresh token
      */
     async freeBusy(ctx) {
-  const { timeMin, timeMax, timeZone } = ctx.request.body;
+      const { timeMin, timeMax, timeZone } = ctx.request.body;
 
-  const iso8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$/;
-  if (!iso8601.test(timeMin) || !iso8601.test(timeMax)) {
-    return ctx.badRequest('Invalid timeMin or timeMax format. Expected ISO 8601 format.');
-  }
-
-  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REFRESH_TOKEN) {
-    return ctx.badRequest('Missing Google API credentials');
-  }
-
-  try {
-    // Get Google access token
-    const tokenRes = await axios.post(
-      'https://oauth2.googleapis.com/token',
-      new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID!,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-        refresh_token: process.env.GOOGLE_REFRESH_TOKEN!,
-        grant_type: 'refresh_token',
-      }),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
-
-    const accessToken = tokenRes.data.access_token;
-
-    // Get calendar IDs
-    const settings = await strapi.entityService.findOne('api::global.global', 1, {
-      fields: ['primaryCalendarId', 'secondCalendar', 'thirdCalendar', 'forthCalendar'],
-    });
-
-    const calendarIds = [
-      settings.primaryCalendarId,
-      settings.secondCalendar,
-      settings.thirdCalendar,
-      settings.forthCalendar,
-    ].filter((id): id is string => Boolean(id));
-
-    const itemsToFetch = calendarIds.length > 0
-      ? calendarIds.map(id => ({ id }))
-      : [{ id: process.env.GOOGLE_CALENDAR_ID || 'primary' }];
-
-    // Query Google FreeBusy
-    const fbResp = await axios.post(
-      'https://www.googleapis.com/calendar/v3/freeBusy',
-      { timeMin, timeMax, timeZone, items: itemsToFetch },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
-
-    const calendarsMap = fbResp.data.calendars || {};
-    const busyEvents = Object.entries(calendarsMap).flatMap(([calendarId, cal]: [string, any]) =>
-      Array.isArray(cal.busy)
-        ? cal.busy.map(b => ({ start: b.start, end: b.end, calendarId }))
-        : []
-    );
-
-    // Convert busy times to ms intervals for conflict checks
-    const busyIntervals = busyEvents.map(be => ({
-      start: new Date(be.start).getTime(),
-      end: new Date(be.end).getTime(),
-    }));
-
-    // Format date/time in timezone WITHOUT offset suffix
-    const formatDateTimeWithoutOffset = (date: Date, tz: string): string => {
-      const formatter = new Intl.DateTimeFormat(undefined, {
-        timeZone: tz,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hourCycle: 'h23',
-      });
-
-      const parts = formatter.formatToParts(date);
-      const dp: Record<string, string> = {};
-      for (const part of parts) {
-        if (['year', 'month', 'day', 'hour', 'minute', 'second'].includes(part.type)) {
-          dp[part.type] = part.value;
-        }
-      }
-      return `${dp.year}-${dp.month}-${dp.day}T${dp.hour}:${dp.minute}:${dp.second}`;
-    };
-
-    // Round date to local hour boundary (up or down)
-    const roundToHourWithTZ = (date: Date, tz: string, up: boolean): number => {
-      const dtf = new Intl.DateTimeFormat(undefined, {
-        timeZone: tz,
-        hour: 'numeric',
-        minute: 'numeric',
-        second: 'numeric',
-        hour12: false,
-      });
-      const parts = dtf.formatToParts(date);
-      const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0');
-      const rounded = new Date(date);
-      rounded.setMinutes(0, 0, 0);
-      if (up && (date.getMinutes() > 0 || date.getSeconds() > 0 || date.getMilliseconds() > 0)) {
-        rounded.setHours(hour + 1);
-      }
-      return rounded.getTime();
-    };
-
-    const startBoundaryMs = roundToHourWithTZ(new Date(timeMin), timeZone, false);
-    const endBoundaryMs = roundToHourWithTZ(new Date(timeMax), timeZone, true);
-
-    const HOUR = 60 * 60 * 1000;
-    const freeSlots: Array<{ start: string; end: string }> = [];
-
-    // Fetch available hours and organize by day
-    const allAvails = await strapi.entityService.findMany('api::available-hour.available-hour', {}); // Assuming this fetches all available hours
-    const windowsByDay: { [key: string]: Array<{ startTime: string; endTime: string }> } = {};
-    for (const avail of allAvails) {
-      if (avail.day) { // Check if day is defined, no dayOff field in schema
-        const dayOfWeek = avail.day.toLowerCase(); // Assuming 'day' field exists and is a string like 'Monday'
-        if (!windowsByDay[dayOfWeek]) {
-          windowsByDay[dayOfWeek] = [];
-        }
-        windowsByDay[dayOfWeek].push({ startTime: avail.timeMin as string, endTime: avail.timeMax as string }); // Explicitly cast TimeValue to string
-      }
-    }
-
-    // Create Intl.DateTimeFormat instances outside the loop for efficiency
-    const weekdayFormatter = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone });
-    const dateFormatter = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone });
-
-    // Iterate through days and check for free slots
-    const startUtc = new Date(timeMin); // Use the original timeMin for the date iteration
-    const endUtc = new Date(timeMax); // Use the original timeMax for the date iteration
-
-    for (let utc = new Date(startUtc); utc <= endUtc; utc.setUTCDate(utc.getUTCDate() + 1)) {
-      // Determine local weekday and date string (YYYY-MM-DD) in the target time zone
-      const localWeekday = weekdayFormatter.format(utc).toLowerCase();
-      const dateStr = dateFormatter.format(utc);
-
-      // Working windows for this local weekday
-      let windows = windowsByDay[localWeekday] || [];
-      if (!windows.length) {
-        // fallback: use all active hours (for entries missing day)
-        windows = allAvails.map((w: any) => ({ startTime: w.timeMin as string, endTime: w.timeMax as string })); // Explicitly cast TimeValue to string
+      const iso8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$/;
+      if (!iso8601.test(timeMin) || !iso8601.test(timeMax)) {
+        return ctx.badRequest('Invalid timeMin or timeMax format. Expected ISO 8601 format.');
       }
 
-      // Iterate through 1-hour slots within the current day's boundaries
-      const dayStartBoundaryMs = roundToHourWithTZ(utc, timeZone, false);
-      const dayEndBoundaryMs = roundToHourWithTZ(utc, timeZone, true);
+      if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REFRESH_TOKEN) {
+        return ctx.badRequest('Missing Google API credentials');
+      }
 
-      for (let slotStart = Math.max(startBoundaryMs, dayStartBoundaryMs); slotStart + HOUR <= Math.min(endBoundaryMs, dayEndBoundaryMs); slotStart += HOUR) {
-        const slotEnd = slotStart + HOUR;
-        const hasConflict = busyIntervals.some(
-          ({ start, end }) => start < slotEnd && end > slotStart
+      try {
+        // Get Google access token
+        const tokenRes = await axios.post(
+          'https://oauth2.googleapis.com/token',
+          new URLSearchParams({
+            client_id: process.env.GOOGLE_CLIENT_ID!,
+            client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+            refresh_token: process.env.GOOGLE_REFRESH_TOKEN!,
+            grant_type: 'refresh_token',
+          }),
+          { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
         );
 
-        if (!hasConflict) {
-          // Check if the free slot is within any of the day's available windows
+        const accessToken = tokenRes.data.access_token;
+
+        // Get calendar IDs
+        const settings = await strapi.entityService.findOne('api::global.global', 1, {
+          fields: ['primaryCalendarId', 'secondCalendar', 'thirdCalendar', 'forthCalendar'],
+        });
+
+        const calendarIds = [
+          settings.primaryCalendarId,
+          settings.secondCalendar,
+          settings.thirdCalendar,
+          settings.forthCalendar,
+        ].filter((id): id is string => Boolean(id));
+
+        const itemsToFetch = calendarIds.length > 0
+          ? calendarIds.map(id => ({ id }))
+          : [{ id: process.env.GOOGLE_CALENDAR_ID || 'primary' }];
+
+        // Query Google FreeBusy
+        const fbResp = await axios.post(
+          'https://www.googleapis.com/calendar/v3/freeBusy',
+          { timeMin, timeMax, timeZone, items: itemsToFetch },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }
+        );
+
+        const calendarsMap = fbResp.data.calendars || {};
+        const busyEvents = Object.entries(calendarsMap).flatMap(([calendarId, cal]: [string, any]) =>
+          Array.isArray(cal.busy)
+            ? cal.busy.map(b => ({ start: b.start, end: b.end, calendarId }))
+            : []
+        );
+
+        // Convert busy times to ms intervals for conflict checks
+        const busyIntervals = busyEvents.map(be => ({
+          start: new Date(be.start).getTime(),
+          end: new Date(be.end).getTime(),
+          calendarId: be.calendarId,
+        }));
+
+        // Format date/time in timezone WITHOUT offset suffix
+        const formatDateTimeWithoutOffset = (date: Date, tz: string): string => {
+          const formatter = new Intl.DateTimeFormat(undefined, {
+            timeZone: tz,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hourCycle: 'h23',
+          });
+
+          const parts = formatter.formatToParts(date);
+          const dp: Record<string, string> = {};
+          for (const part of parts) {
+            if (['year', 'month', 'day', 'hour', 'minute', 'second'].includes(part.type)) {
+              dp[part.type] = part.value;
+            }
+          }
+          return `${dp.year}-${dp.month}-${dp.day}T${dp.hour}:${dp.minute}:${dp.second}`;
+        };
+
+        // Build busySlots for the whole day (from timeMin to timeMax, 1-hour slots)
+        const busySlots: Array<{ start: string; end: string; calendarIds: string[] }> = [];
+        const freeSlots: Array<{ start: string; end: string }> = [];
+
+        // Build all 1-hour slots for the whole requested range
+        const startBoundaryMs = new Date(timeMin).getTime();
+        const endBoundaryMs = new Date(timeMax).getTime();
+        const HOUR = 60 * 60 * 1000;
+        for (let slotStart = startBoundaryMs; slotStart + HOUR <= endBoundaryMs; slotStart += HOUR) {
+          const slotEnd = slotStart + HOUR;
+          // Check for any overlap with busy intervals
+          const overlapping = busyIntervals.filter(
+            ({ start, end }) => start < slotEnd && end > slotStart
+          );
+          if (overlapping.length > 0) {
+            const calendarIds = Array.from(new Set(overlapping.map(b => b.calendarId)));
+            busySlots.push({
+              start: formatDateTimeWithoutOffset(new Date(slotStart), timeZone),
+              end: formatDateTimeWithoutOffset(new Date(slotEnd), timeZone),
+              calendarIds,
+            });
+          }
+        }
+
+        // Free slots: only those within available hours and not busy
+        // Fetch available hours from Strapi
+        const allAvails = await strapi.entityService.findMany('api::available-hour.available-hour', {});
+        const windowsByDay: { [key: string]: Array<{ startTime: string; endTime: string }> } = {};
+        for (const avail of allAvails) {
+          if (avail.day) {
+            const dayOfWeek = avail.day.toLowerCase();
+            if (!windowsByDay[dayOfWeek]) {
+              windowsByDay[dayOfWeek] = [];
+            }
+            windowsByDay[dayOfWeek].push({ startTime: avail.timeMin as string, endTime: avail.timeMax as string });
+          }
+        }
+        const weekdayFormatter = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone });
+        let current = new Date(timeMin);
+        const end = new Date(timeMax);
+        while (current < end) {
+          const localWeekday = weekdayFormatter.format(current).toLowerCase();
+          const windows = windowsByDay[localWeekday] || [];
           for (const window of windows) {
             const [startHour, startMinute] = window.startTime.split(':').map(Number);
             const [endHour, endMinute] = window.endTime.split(':').map(Number);
-
-            // Create Date objects for window boundaries in the target time zone for the current day
-            const windowStartDate = new Date(utc);
-            windowStartDate.setHours(startHour, startMinute, 0, 0);
-
-            const windowEndDate = new Date(utc);
-            windowEndDate.setHours(endHour, endMinute, 0, 0);
-
-            const windowStartMs = windowStartDate.getTime();
-            const windowEndMs = windowEndDate.getTime();
-
-            // Ensure the free slot is fully within the available window
-            if (slotStart >= windowStartMs && slotEnd <= windowEndMs) {
-              freeSlots.push({
-                start: formatDateTimeWithoutOffset(new Date(slotStart), timeZone),
-                end: formatDateTimeWithoutOffset(new Date(slotEnd), timeZone),
-              });
-              break; // Found a window for this slot, move to the next slot
+            const windowStart = new Date(current);
+            windowStart.setHours(startHour, startMinute, 0, 0);
+            const windowEnd = new Date(current);
+            windowEnd.setHours(endHour, endMinute, 0, 0);
+            let slotStart = windowStart.getTime();
+            if (new Date(slotStart).getMinutes() !== 0 || new Date(slotStart).getSeconds() !== 0 || new Date(slotStart).getMilliseconds() !== 0) {
+              const d = new Date(slotStart);
+              d.setMinutes(0, 0, 0);
+              d.setHours(d.getHours() + 1);
+              slotStart = d.getTime();
+            }
+            while (slotStart + HOUR <= windowEnd.getTime() && slotStart + HOUR <= end.getTime()) {
+              const slotEnd = slotStart + HOUR;
+              // Check for any overlap with busy intervals
+              const overlapping = busyIntervals.filter(
+                ({ start, end }) => start < slotEnd && end > slotStart
+              );
+              if (overlapping.length === 0) {
+                freeSlots.push({
+                  start: formatDateTimeWithoutOffset(new Date(slotStart), timeZone),
+                  end: formatDateTimeWithoutOffset(new Date(slotEnd), timeZone),
+                });
+              }
+              slotStart += HOUR;
             }
           }
+          current.setUTCDate(current.getUTCDate() + 1);
+          current.setUTCHours(0, 0, 0, 0);
         }
+
+        // Deduplicate slots by start and end
+        function dedupeSlots(slots) {
+          const seen = new Set();
+          return slots.filter(slot => {
+            const key = `${slot.start}|${slot.end}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        }
+
+        return {
+          busySlots: dedupeSlots(busySlots),
+          freeSlots: dedupeSlots(freeSlots),
+        };
+      } catch (err: any) {
+        strapi.log.error('Google freeBusy error:', err);
+        return ctx.badRequest(err.message || 'Google freeBusy API error');
       }
-    }
-
-    const busyOriginal = busyEvents.map(be => ({
-      start: formatDateTimeWithoutOffset(new Date(be.start), timeZone),
-      end: formatDateTimeWithoutOffset(new Date(be.end), timeZone),
-      calendarId: be.calendarId,
-    }));
-
-    return {
-      busy: busyOriginal,
-      freeCount: freeSlots.length,
-      freeSlots,
-    };
-
-  } catch (err: any) {
-    strapi.log.error('Google freeBusy error:', err);
-    return ctx.badRequest(err.message || 'Google freeBusy API error');
-  }
-},
+    },
 
 
   /**

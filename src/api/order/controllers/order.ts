@@ -27,14 +27,12 @@ interface ZarinpalResponse<T> {
 }
 
 interface OrderData {
-  // Order fields
   price?: string;
   quantity?: string;
   amount: string;
   note?: string;
   internalNote?: string;
   package: number;
-  // Sponsor relation (use id) or nested sponsor data
   sponser?: number;
   name?: string;
   email?: string;
@@ -43,6 +41,7 @@ interface OrderData {
   companyWebsite?: string;
   instagramId?: string;
   companyLogo?: number;
+  couponCode?: string;
 }
 
 export default factories.createCoreController('api::order.order', ({ strapi }) => ({
@@ -99,16 +98,43 @@ export default factories.createCoreController('api::order.order', ({ strapi }) =
         }
       }
 
+      // Coupon logic
+      let discount = 0;
+      let couponId = null;
+      if (data.couponCode) {
+        const coupons = await strapi.entityService.findMany('api::coupon.coupon', {
+          filters: { code: data.couponCode, isActive: true, applicableTo: 'orders' },
+          limit: 1,
+        });
+        if (!coupons.length) return ctx.badRequest('Invalid or inactive coupon');
+        const c = coupons[0];
+        // Validate date
+        const now = new Date();
+        if (c.startDate && new Date(c.startDate) > now) return ctx.badRequest('Coupon not started yet');
+        if (c.endDate && new Date(c.endDate) < now) return ctx.badRequest('Coupon expired');
+        if (c.usageLimit && c.usedCount && c.usedCount >= c.usageLimit) return ctx.badRequest('Coupon usage limit reached');
+        if (c.minOrderAmount && Number(data.amount) < c.minOrderAmount) return ctx.badRequest('Order amount below coupon minimum');
+        // Calculate discount
+        if (c.type === 'percentage') {
+          discount = Number(data.amount) * Number(c.value) / 100;
+        } else if (c.type === 'fixed') {
+          discount = Number(c.value);
+        }
+        couponId = c.id;
+      }
+
+      const finalAmount = Math.max(0, Number(data.amount) - discount);
       const order = await strapi.entityService.create('api::order.order', {
         data: {
           package: data.package,
-          amount: data.amount,
+          amount: String(finalAmount),
           price: data.price,
           quantity: data.quantity,
           note: data.note,
           internalNote: data.internalNote,
           sponser: sponserId,
           orderStatus: 'Payment initiated',
+          coupon: couponId,
         },
       });
       // sponsor relation provided via data.sponser in request
@@ -118,7 +144,7 @@ export default factories.createCoreController('api::order.order', ({ strapi }) =
       const callbackUrl = `${callbackBase}?orderId=${order.id}`;
       const paymentRequest: ZarinpalPaymentRequest = {
         merchant_id: process.env.ZARINPAL_MERCHANT_ID!,
-        amount: Math.floor(Number(data.amount) * 10),
+        amount: Math.floor(Number(finalAmount) * 10),
         callback_url: callbackUrl,
         description: process.env.ZARINPAL_DESCRIPTION_ORDERS!,
         metadata: {
@@ -183,7 +209,7 @@ export default factories.createCoreController('api::order.order', ({ strapi }) =
       return ctx.badRequest('Missing orderId query parameter');
     }
     // Fetch existing order
-    const order = await strapi.entityService.findOne('api::order.order', orderId);
+    const order = await strapi.entityService.findOne('api::order.order', orderId, { populate: ['coupon'] }) as any;
     if (!order) {
       return ctx.notFound(`Order not found for id=${orderId}`);
     }
@@ -230,13 +256,11 @@ export default factories.createCoreController('api::order.order', ({ strapi }) =
           transactionId: success && refId != null ? String(refId) : null,
         },
       });
-      // Optionally activate sponsor
-      if (success) {
-        const sponsorRelation = (order as any).sponser;
-        const sponsorId = (sponsorRelation as any)?.id ?? sponsorRelation;
-        if (sponsorId) {
-          await strapi.entityService.update('api::sponser.sponser', sponsorId, { data: { active: true } });
-        }
+      // Increment coupon usage if applicable
+      if (success && order.coupon && order.coupon.id) {
+        await strapi.entityService.update('api::coupon.coupon', order.coupon.id, {
+          data: { usedCount: (order.coupon.usedCount || 0) + 1 },
+        });
       }
       // Re-fetch the updated order
       const resultOrder = await strapi.entityService.findOne('api::order.order', orderId, {

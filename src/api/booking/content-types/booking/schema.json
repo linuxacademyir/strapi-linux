@@ -72,6 +72,11 @@
     },
     "googleConferenceId": {
       "type": "string"
+    },
+    "coupon": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::coupon.coupon"
     }
   }
 }

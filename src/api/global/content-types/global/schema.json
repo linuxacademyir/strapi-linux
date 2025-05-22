@@ -57,6 +57,48 @@
     },
     "forthCalendar": {
       "type": "string"
+    },
+    "CalendarOwnerPhone": {
+      "type": "integer"
+    },
+    "CalendarTimeZone": {
+      "type": "enumeration",
+      "enum": [
+        "Asia/Tehran",
+        "America/New_York",
+        "America/Chicago",
+        "America/Denver",
+        "America/Los_Angeles",
+        "America/Toronto",
+        "America/Vancouver",
+        "America/Halifax",
+        "Europe/London",
+        "Europe/Berlin",
+        "Europe/Paris",
+        "Europe/Rome",
+        "Europe/Madrid",
+        "America/Sao_Paulo",
+        "Europe/Moscow",
+        "Asia/Yekaterinburg",
+        "Asia/Vladivostok",
+        "Asia/Kolkata",
+        "Asia/Shanghai",
+        "Asia/Tokyo",
+        "Asia/Seoul",
+        "Australia/Sydney",
+        "Australia/Adelaide",
+        "Australia/Perth",
+        "America/Mexico_City",
+        "Africa/Johannesburg",
+        "Asia/Riyadh",
+        "Asia/Dubai",
+        "Europe/Istanbul",
+        "Asia/Jakarta",
+        "Asia/Makassar",
+        "Asia/Jayapura",
+        "Africa/Lagos",
+        "Africa/Cairo"
+      ]
     }
   }
 }

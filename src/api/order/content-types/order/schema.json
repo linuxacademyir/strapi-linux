@@ -55,6 +55,11 @@
       "relation": "manyToOne",
       "target": "api::sponser.sponser",
       "inversedBy": "orders"
+    },
+    "coupon": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::coupon.coupon"
     }
   }
 }

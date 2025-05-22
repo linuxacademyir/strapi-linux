@@ -520,6 +520,7 @@ export interface ApiBookingBooking extends Struct.CollectionTypeSchema {
       ]
     > &
       Schema.Attribute.DefaultTo<'Payment initiated'>;
+    coupon: Schema.Attribute.Relation<'manyToOne', 'api::coupon.coupon'>;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -598,6 +599,7 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
 export interface ApiCouponCoupon extends Struct.CollectionTypeSchema {
   collectionName: 'coupons';
   info: {
+    description: '';
     displayName: 'Coupon';
     pluralName: 'coupons';
     singularName: 'coupon';
@@ -791,6 +793,45 @@ export interface ApiGlobalGlobal extends Struct.SingleTypeSchema {
     draftAndPublish: false;
   };
   attributes: {
+    CalendarOwnerPhone: Schema.Attribute.Integer;
+    CalendarTimeZone: Schema.Attribute.Enumeration<
+      [
+        'Asia/Tehran',
+        'America/New_York',
+        'America/Chicago',
+        'America/Denver',
+        'America/Los_Angeles',
+        'America/Toronto',
+        'America/Vancouver',
+        'America/Halifax',
+        'Europe/London',
+        'Europe/Berlin',
+        'Europe/Paris',
+        'Europe/Rome',
+        'Europe/Madrid',
+        'America/Sao_Paulo',
+        'Europe/Moscow',
+        'Asia/Yekaterinburg',
+        'Asia/Vladivostok',
+        'Asia/Kolkata',
+        'Asia/Shanghai',
+        'Asia/Tokyo',
+        'Asia/Seoul',
+        'Australia/Sydney',
+        'Australia/Adelaide',
+        'Australia/Perth',
+        'America/Mexico_City',
+        'Africa/Johannesburg',
+        'Asia/Riyadh',
+        'Asia/Dubai',
+        'Europe/Istanbul',
+        'Asia/Jakarta',
+        'Asia/Makassar',
+        'Asia/Jayapura',
+        'Africa/Lagos',
+        'Africa/Cairo',
+      ]
+    >;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -835,6 +876,7 @@ export interface ApiOrderOrder extends Struct.CollectionTypeSchema {
   };
   attributes: {
     amount: Schema.Attribute.String;
+    coupon: Schema.Attribute.Relation<'manyToOne', 'api::coupon.coupon'>;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;

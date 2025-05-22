@@ -1,0 +1,52 @@
+{
+  "kind": "collectionType",
+  "collectionName": "coupons",
+  "info": {
+    "singularName": "coupon",
+    "pluralName": "coupons",
+    "displayName": "Coupon"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "code": {
+      "type": "string"
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": [
+        "percentage",
+        "fixed"
+      ]
+    },
+    "value": {
+      "type": "decimal"
+    },
+    "usageLimit": {
+      "type": "integer"
+    },
+    "usedCount": {
+      "type": "integer"
+    },
+    "minOrderAmount": {
+      "type": "integer"
+    },
+    "startDate": {
+      "type": "date"
+    },
+    "endDate": {
+      "type": "date"
+    },
+    "isActive": {
+      "type": "boolean"
+    },
+    "applicableTo": {
+      "type": "enumeration",
+      "enum": [
+        "orders",
+        "bookings"
+      ]
+    }
+  }
+}

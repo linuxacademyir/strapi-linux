@@ -48,6 +48,15 @@
     },
     "primaryCalendarId": {
       "type": "string"
+    },
+    "secondCalendar": {
+      "type": "string"
+    },
+    "thirdCalendar": {
+      "type": "string"
+    },
+    "forthCalendar": {
+      "type": "string"
     }
   }
 }

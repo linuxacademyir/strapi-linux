@@ -66,6 +66,12 @@
     },
     "internalNote": {
       "type": "text"
+    },
+    "eventId": {
+      "type": "string"
+    },
+    "googleConferenceId": {
+      "type": "string"
     }
   }
 }

@@ -24,27 +24,12 @@
       ],
       "required": true
     },
-    "startTime": {
+    "timeMin": {
       "type": "time",
       "required": true
     },
-    "endTime": {
+    "timeMax": {
       "type": "time",
-      "required": true
-    },
-    "timeZone": {
-      "type": "enumeration",
-      "enum": [
-        "UTC",
-        "Europe/London",
-        "Europe/Berlin",
-        "America/New_York",
-        "America/Los_Angeles",
-        "Asia/Tehran",
-        "Asia/Dubai",
-        "Asia/Tokyo",
-        "Australia/Sydney"
-      ],
       "required": true
     }
   }

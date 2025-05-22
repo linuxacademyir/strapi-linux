@@ -475,7 +475,6 @@ export interface ApiAvailableHourAvailableHour
       ]
     > &
       Schema.Attribute.Required;
-    endTime: Schema.Attribute.Time & Schema.Attribute.Required;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -483,21 +482,8 @@ export interface ApiAvailableHourAvailableHour
     > &
       Schema.Attribute.Private;
     publishedAt: Schema.Attribute.DateTime;
-    startTime: Schema.Attribute.Time & Schema.Attribute.Required;
-    timeZone: Schema.Attribute.Enumeration<
-      [
-        'UTC',
-        'Europe/London',
-        'Europe/Berlin',
-        'America/New_York',
-        'America/Los_Angeles',
-        'Asia/Tehran',
-        'Asia/Dubai',
-        'Asia/Tokyo',
-        'Australia/Sydney',
-      ]
-    > &
-      Schema.Attribute.Required;
+    timeMax: Schema.Attribute.Time & Schema.Attribute.Required;
+    timeMin: Schema.Attribute.Time & Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -538,6 +524,8 @@ export interface ApiBookingBooking extends Struct.CollectionTypeSchema {
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     customer: Schema.Attribute.Relation<'manyToOne', 'api::customer.customer'>;
+    eventId: Schema.Attribute.String;
+    googleConferenceId: Schema.Attribute.String;
     hours: Schema.Attribute.Integer &
       Schema.Attribute.Required &
       Schema.Attribute.SetMinMax<
@@ -771,6 +759,7 @@ export interface ApiGlobalGlobal extends Struct.SingleTypeSchema {
       Schema.Attribute.Private;
     defaultSeo: Schema.Attribute.Component<'shared.seo', false>;
     favicon: Schema.Attribute.Media<'images' | 'files' | 'videos'>;
+    forthCalendar: Schema.Attribute.String;
     hourlyRate: Schema.Attribute.String;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
@@ -781,8 +770,10 @@ export interface ApiGlobalGlobal extends Struct.SingleTypeSchema {
     logo: Schema.Attribute.Media<'images'>;
     primaryCalendarId: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
+    secondCalendar: Schema.Attribute.String;
     siteDescription: Schema.Attribute.Text & Schema.Attribute.Required;
     siteName: Schema.Attribute.String & Schema.Attribute.Required;
+    thirdCalendar: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
